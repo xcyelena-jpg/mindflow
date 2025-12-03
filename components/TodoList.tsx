@@ -136,9 +136,9 @@ export const TodoList: React.FC<TodoListProps> = ({ tasks, setTasks, selectedDat
       if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) {
           if (e.cancelable) e.preventDefault(); // Stop scrolling
 
-          // Only allow right swipe (positive deltaX)
-          if (deltaX > 0) {
-              setSwipeOffset(Math.min(deltaX, 150)); // Cap at 150px
+          // Allow LEFT swipe (negative deltaX) to show right-side button
+          if (deltaX < 0) {
+              setSwipeOffset(Math.max(deltaX, -80)); // Limit to -80px left
           } else {
               setSwipeOffset(0);
           }
@@ -149,8 +149,8 @@ export const TodoList: React.FC<TodoListProps> = ({ tasks, setTasks, selectedDat
       handlePressEnd(); // Clear long press
 
       if (swipingTaskId) {
-          // Threshold to trigger delete
-          if (swipeOffset > 80) {
+          // Threshold to trigger delete (e.g. pulled -50px left)
+          if (swipeOffset < -50) {
              const task = tasks.find(t => t.id === swipingTaskId);
              if (task) setTaskToDelete(task);
           }
@@ -251,12 +251,13 @@ export const TodoList: React.FC<TodoListProps> = ({ tasks, setTasks, selectedDat
           </div>
         ) : (
           sortedTasks.map(task => (
-            <div key={task.id} className="relative select-none">
+            <div key={task.id} className="relative select-none group">
               
-              {/* Background Layer (Swipe Reveal) */}
-              <div className="absolute inset-0 bg-danger-red rounded-2xl flex items-center justify-start pl-6 z-0">
-                  <Trash2 className="w-5 h-5 text-white" />
-                  <span className="text-white text-xs font-bold ml-2">松手删除</span>
+              {/* Background Layer (Right-side Delete Button) */}
+              <div className="absolute right-4 top-0 bottom-0 w-16 flex items-center justify-end z-0">
+                  <div className="w-12 h-12 bg-rose-500 rounded-2xl flex items-center justify-center shadow-inner shadow-black/10">
+                      <Trash2 className="w-5 h-5 text-white" />
+                  </div>
               </div>
 
               {/* Foreground Layer (Task Card) */}
@@ -275,7 +276,7 @@ export const TodoList: React.FC<TodoListProps> = ({ tasks, setTasks, selectedDat
                 }}
                 className={`relative z-10 flex items-start gap-3 p-4 rounded-2xl border w-full cursor-pointer touch-pan-y transition-all duration-200 ${
                   task.completed 
-                    ? 'bg-white/60 border-gray-100' // Cleaner look for completed
+                    ? 'bg-gray-50 border-gray-100' // Opaque background for completed
                     : 'bg-surface border-border shadow-sm'
                 }`}
               >
@@ -341,7 +342,7 @@ export const TodoList: React.FC<TodoListProps> = ({ tasks, setTasks, selectedDat
                     <button onClick={cancelDeleteTask} className="w-full py-3.5 bg-gray-100 text-text-muted text-sm font-extrabold rounded-2xl hover:bg-gray-200 transition-colors">
                       取消
                     </button>
-                    <button onClick={confirmDeleteTask} className="w-full py-3.5 bg-danger-red text-white text-sm font-extrabold rounded-2xl shadow-lg shadow-red-500/25 hover:bg-red-600 transition-colors active:scale-95">
+                    <button onClick={confirmDeleteTask} className="w-full py-3.5 bg-rose-500 text-white text-sm font-extrabold rounded-2xl shadow-lg shadow-rose-500/25 hover:bg-rose-600 transition-colors active:scale-95">
                       删除
                     </button>
                 </div>
