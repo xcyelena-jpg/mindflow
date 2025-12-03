@@ -19,8 +19,9 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ tasks, journalCont
     try {
       const result = await analyzeDailyContent(tasks, journalContent);
       setAnalysis(result);
-    } catch (err) {
-      setError("分析失败，请稍后重试。");
+    } catch (err: any) {
+      // Display the specific error message (e.g., "Please configure API_KEY")
+      setError(err.message || "分析失败，请稍后重试。");
     } finally {
       setLoading(false);
     }
@@ -68,8 +69,11 @@ export const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ tasks, journalCont
         </div>
       ) : error ? (
         <div className="h-full flex items-center justify-center flex-col gap-4 bg-red-50 rounded-3xl border border-red-200 p-6 text-center shadow-md">
-          <p className="text-red-600 font-bold">{error}</p>
+          <p className="text-red-600 font-bold text-sm px-4">{error}</p>
           <button onClick={handleAnalyze} className="text-sm font-bold text-red-600/70 underline hover:text-red-600">重试一下</button>
+          {error.includes("API_KEY") && (
+             <p className="text-xs text-text-muted mt-2">请在 Vercel 后台配置 API Key</p>
+          )}
         </div>
       ) : analysis ? (
         <div className="h-full bg-surface rounded-3xl p-6 flex flex-col gap-5 overflow-y-auto no-scrollbar border border-border shadow-md">
