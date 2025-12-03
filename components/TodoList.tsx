@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Task, Tag } from '../types';
-import { Plus, Trash2, Check, Sparkles, Loader2, Clock } from 'lucide-react';
-import { breakDownTask } from '../services/geminiService';
+import { Plus, Trash2, Check, Sparkles, Clock } from 'lucide-react';
 
 interface TodoListProps {
   tasks: Task[];
@@ -21,7 +20,6 @@ const formatDateToKey = (date: Date): string => {
 
 export const TodoList: React.FC<TodoListProps> = ({ tasks, setTasks, selectedDate, tags, onAddTag }) => {
   const [newTaskText, setNewTaskText] = useState('');
-  const [isBreakingDown, setIsBreakingDown] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
 
   // --- Editing State ---
@@ -64,29 +62,6 @@ export const TodoList: React.FC<TodoListProps> = ({ tasks, setTasks, selectedDat
 
   const deleteTask = (id: string) => {
     setTasks(prev => prev.filter(t => t.id !== id));
-  };
-
-  const handleMagicBreakdown = async () => {
-    if (!newTaskText.trim()) return;
-    setIsBreakingDown(true);
-    try {
-      const subtasks = await breakDownTask(newTaskText);
-      if (subtasks.length > 0) {
-        const newTasks: Task[] = subtasks.map(st => ({
-          id: Date.now().toString() + Math.random().toString(),
-          text: st, completed: false, createdAt: Date.now(), priority: 'medium', tags: [],
-          dueDate: isToday(selectedDate) ? undefined : formatDateToKey(selectedDate),
-        }));
-        setTasks(prev => [...newTasks, ...prev]);
-        setNewTaskText('');
-      } else {
-        addTask(newTaskText);
-      }
-    } catch (e) {
-      addTask(newTaskText);
-    } finally {
-      setIsBreakingDown(false);
-    }
   };
 
   // --- Editing Logic ---
@@ -257,11 +232,8 @@ export const TodoList: React.FC<TodoListProps> = ({ tasks, setTasks, selectedDat
 
       <div className="relative mb-6 z-10">
         <div className="relative group">
-             <input type="text" value={newTaskText} onChange={(e) => setNewTaskText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addTask(newTaskText)} placeholder="添加一个小目标..." className="w-full pl-5 pr-28 py-4 rounded-2xl bg-gray-50 border border-border hover:border-gray-300 focus:bg-white focus:border-task-blue focus:ring-2 focus:ring-task-blue/20 text-text-main placeholder-text-muted transition-all outline-none font-semibold shadow-inner-sm" />
+             <input type="text" value={newTaskText} onChange={(e) => setNewTaskText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addTask(newTaskText)} placeholder="添加一个小目标..." className="w-full pl-5 pr-14 py-4 rounded-2xl bg-gray-50 border border-border hover:border-gray-300 focus:bg-white focus:border-task-blue focus:ring-2 focus:ring-task-blue/20 text-text-main placeholder-text-muted transition-all outline-none font-semibold shadow-inner-sm" />
              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1 z-10">
-                <button onClick={handleMagicBreakdown} disabled={!newTaskText || isBreakingDown} className="p-2.5 text-task-blue hover:bg-task-blue-light rounded-xl transition-all active:scale-95 disabled:opacity-50 disabled:text-text-muted" title="AI 智能拆解">
-                    {isBreakingDown ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" strokeWidth={2} />}
-                </button>
                 <button onClick={() => addTask(newTaskText)} disabled={!newTaskText} className="p-2.5 bg-task-blue text-white rounded-xl shadow-md shadow-task-blue/25 hover:shadow-lg hover:shadow-task-blue/30 transition-all active:scale-90 disabled:opacity-50 disabled:shadow-none disabled:bg-gray-200">
                     <Plus className="w-5 h-5" strokeWidth={3} />
                 </button>
@@ -301,9 +273,9 @@ export const TodoList: React.FC<TodoListProps> = ({ tasks, setTasks, selectedDat
                     transform: `translateX(${task.id === swipingTaskId ? swipeOffset : 0}px)`,
                     transition: task.id === swipingTaskId && swipeOffset !== 0 ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)'
                 }}
-                className={`relative z-10 flex items-start gap-3 p-4 rounded-2xl border w-full cursor-pointer touch-pan-y ${
+                className={`relative z-10 flex items-start gap-3 p-4 rounded-2xl border w-full cursor-pointer touch-pan-y transition-all duration-200 ${
                   task.completed 
-                    ? 'bg-gray-50 opacity-70 border-border' 
+                    ? 'bg-white/60 border-gray-100' // Cleaner look for completed
                     : 'bg-surface border-border shadow-sm'
                 }`}
               >
@@ -335,7 +307,11 @@ export const TodoList: React.FC<TodoListProps> = ({ tasks, setTasks, selectedDat
                         rows={1}
                      />
                    ) : (
-                     <span className={`font-semibold transition-all break-words leading-tight block ${task.completed ? 'text-text-muted line-through decoration-gray-300' : 'text-text-main'}`}>
+                     <span className={`font-semibold transition-all break-words leading-tight block ${
+                         task.completed 
+                            ? 'text-gray-300 line-through decoration-task-blue/40 decoration-2' 
+                            : 'text-text-main'
+                         }`}>
                         {task.text}
                      </span>
                    )}
