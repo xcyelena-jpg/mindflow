@@ -1,8 +1,14 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Task, JournalEntry, DailyAnalysis } from "../types";
 
-// Fix: Per Gemini API guidelines, initialize the client assuming API_KEY is available.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+// Helper function to get AI instance safely
+const getAIClient = () => {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    throw new Error("请在 Vercel 环境变量中配置 API_KEY");
+  }
+  return new GoogleGenAI({ apiKey });
+};
 
 export const analyzeDailyContent = async (
   tasks: Task[],
@@ -27,6 +33,9 @@ export const analyzeDailyContent = async (
   `;
 
   try {
+    // Initialize client only when function is called
+    const ai = getAIClient();
+    
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: prompt,
@@ -49,9 +58,10 @@ export const analyzeDailyContent = async (
     if (!text) throw new Error("No response from AI");
     
     return JSON.parse(text) as DailyAnalysis;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gemini Analysis Error:", error);
-    throw error;
+    // Throw the specific error message (e.g., missing key) so the UI can show it
+    throw new Error(error.message || "AI 分析服务暂时不可用");
   }
 };
 
@@ -63,6 +73,9 @@ export const breakDownTask = async (taskText: string): Promise<string[]> => {
   `;
 
   try {
+    // Initialize client only when function is called
+    const ai = getAIClient();
+
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: prompt,
@@ -80,6 +93,7 @@ export const breakDownTask = async (taskText: string): Promise<string[]> => {
     return JSON.parse(text) as string[];
   } catch (error) {
     console.error("Gemini Breakdown Error:", error);
+    // Return empty array instead of throwing, so the task is just added normally
     return [];
   }
 };
