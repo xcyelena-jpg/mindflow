@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { TodoList } from './components/TodoList';
 import { Diary } from './components/Diary';
-import { AnalysisPanel } from './components/AnalysisPanel';
 import { CalendarView } from './components/CalendarView';
 import { Task, JournalEntry, Tag, TAG_COLORS } from './types';
 import { LayoutDashboard, Calendar as CalendarIcon, ListTodo, BookOpen, Sparkles } from 'lucide-react';
@@ -74,27 +73,6 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('mindflow_entries', JSON.stringify(entries)); }, [entries]);
   useEffect(() => { localStorage.setItem('mindflow_tags', JSON.stringify(tags)); }, [tags]);
 
-  // --- Derived State & Helpers ---
-  const isToday = (d: Date) => {
-    const today = new Date();
-    return d.getDate() === today.getDate() &&
-           d.getMonth() === today.getMonth() &&
-           d.getFullYear() === today.getFullYear();
-  };
-
-  const visibleTasksForAnalysis = useMemo(() => {
-    const selectedKey = formatDateToKey(selectedDate);
-    const todayKey = formatDateToKey(new Date());
-
-    return tasks.filter(task => {
-      const isCompletedOnDate = task.completed && task.completedAt === selectedKey;
-      const isDueOnDate = !task.completed && task.dueDate === selectedKey;
-      const isPendingNoDueDateOnSelectedToday = !task.completed && !task.dueDate && selectedKey === todayKey;
-      return isCompletedOnDate || isDueOnDate || isPendingNoDueDateOnSelectedToday;
-    });
-  }, [tasks, selectedDate]);
-
-
   // --- Navigation Logic ---
 
   const handleTabClick = (tab: 'tasks' | 'diary') => {
@@ -110,7 +88,7 @@ const App: React.FC = () => {
     container.scrollTo({ left, behavior: 'smooth' });
 
     if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-    scrollTimeoutRef.current = setTimeout(() => {
+    scrollTimeoutRef.current = window.setTimeout(() => {
       isProgrammaticScroll.current = false;
     }, 500); // Lock for slightly longer than typical smooth scroll
   };
@@ -181,11 +159,6 @@ const App: React.FC = () => {
       return newTag;
   };
 
-  const getSelectedEntryContent = () => {
-      const key = formatDateToKey(selectedDate);
-      return entries[key]?.content || '';
-  };
-
   const handleDateSelect = (date: Date) => {
       setSelectedDate(date);
       setView('dashboard');
@@ -195,7 +168,13 @@ const App: React.FC = () => {
         // This ensures the button color is correct immediately.
         setActiveMobileTab('tasks');
         if (swipeContainerRef.current) {
+          isProgrammaticScroll.current = true; // Lock scroll listener
           swipeContainerRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+          
+          if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+          scrollTimeoutRef.current = window.setTimeout(() => {
+            isProgrammaticScroll.current = false;
+          }, 500);
         }
       }
   };
@@ -242,8 +221,8 @@ const App: React.FC = () => {
 
         <main className="flex-1 min-h-0 relative flex flex-col overflow-hidden">
             {view === 'dashboard' ? (
-                 <div className="hidden md:grid h-full grid-cols-12 gap-6 overflow-hidden">
-                    <div className="col-span-4 h-full min-h-[400px]">
+                 <div className="hidden md:grid h-full grid-cols-2 gap-6 overflow-hidden">
+                    <div className="h-full min-h-[400px]">
                         <TodoList 
                             tasks={tasks} 
                             setTasks={setTasks} 
@@ -252,15 +231,12 @@ const App: React.FC = () => {
                             onAddTag={handleAddTag}
                         />
                     </div>
-                    <div className="col-span-4 h-full min-h-[400px]">
+                    <div className="h-full min-h-[400px]">
                         <Diary 
                             selectedDate={selectedDate}
                             entries={entries}
                             setEntries={setEntries}
                         />
-                    </div>
-                    <div className="col-span-4 h-full min-h-[300px]">
-                        <AnalysisPanel tasks={visibleTasksForAnalysis} journalContent={getSelectedEntryContent()} />
                     </div>
                 </div>
             ) : (
@@ -293,19 +269,14 @@ const App: React.FC = () => {
                         className="flex w-full h-full overflow-x-auto overflow-y-hidden snap-x snap-mandatory no-scrollbar scroll-smooth"
                     >
                         <div ref={taskPageRef} className="min-w-full w-full h-full snap-center overflow-y-auto pb-32 pt-2 px-4 no-scrollbar">
-                            <div className="flex flex-col gap-6 min-h-full">
-                                <div className="shrink-0">
-                                    <TodoList 
-                                        tasks={tasks} 
-                                        setTasks={setTasks} 
-                                        selectedDate={selectedDate}
-                                        tags={tags}
-                                        onAddTag={handleAddTag}
-                                    />
-                                </div>
-                                <div className="shrink-0 pb-6">
-                                    <AnalysisPanel tasks={visibleTasksForAnalysis} journalContent={getSelectedEntryContent()} />
-                                </div>
+                            <div className="h-full">
+                                <TodoList 
+                                    tasks={tasks} 
+                                    setTasks={setTasks} 
+                                    selectedDate={selectedDate}
+                                    tags={tags}
+                                    onAddTag={handleAddTag}
+                                />
                             </div>
                         </div>
 
