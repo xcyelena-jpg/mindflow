@@ -30,8 +30,13 @@ export const TodoList: React.FC<TodoListProps> = ({ tasks, setTasks, selectedDat
   // --- Swipe & Long Press Logic ---
   const longPressTimer = useRef<number | null>(null);
   const touchStart = useRef<{x: number, y: number} | null>(null);
+  
+  // Track which task is currently being dragged
   const [swipingTaskId, setSwipingTaskId] = useState<string | null>(null);
+  // Track the current drag offset
   const [swipeOffset, setSwipeOffset] = useState(0);
+  // Track which task is permanently "open" (button revealed)
+  const [openSwipeTaskId, setOpenSwipeTaskId] = useState<string | null>(null);
 
   const isToday = (d: Date) => {
     const today = new Date();
@@ -48,7 +53,6 @@ export const TodoList: React.FC<TodoListProps> = ({ tasks, setTasks, selectedDat
       completed: false,
       createdAt: Date.now(),
       priority: 'medium',
-      // Only set a due date if the selected date is not today.
       dueDate: isToday(selectedDate) ? undefined : formatDateToKey(selectedDate),
       tags: [],
     };
@@ -62,11 +66,13 @@ export const TodoList: React.FC<TodoListProps> = ({ tasks, setTasks, selectedDat
 
   const deleteTask = (id: string) => {
     setTasks(prev => prev.filter(t => t.id !== id));
+    setOpenSwipeTaskId(null); // Close swipe after delete
   };
 
   // --- Editing Logic ---
   const startEditing = (task: Task) => {
     if (task.completed) return;
+    setOpenSwipeTaskId(null); // Close any open swipes
     setEditingTaskId(task.id);
     setEditText(task.text);
   };
@@ -84,12 +90,11 @@ export const TodoList: React.FC<TodoListProps> = ({ tasks, setTasks, selectedDat
     setEditText('');
   };
   
-  // Auto-resize textarea
   useEffect(() => {
     if (editingTaskId && editInputRef.current) {
         const textarea = editInputRef.current;
-        textarea.style.height = 'auto'; // Reset height
-        textarea.style.height = `${textarea.scrollHeight}px`; // Set to scroll height
+        textarea.style.height = 'auto';
+        textarea.style.height = `${textarea.scrollHeight}px`;
     }
   }, [editText, editingTaskId]);
   
@@ -107,17 +112,27 @@ export const TodoList: React.FC<TodoListProps> = ({ tasks, setTasks, selectedDat
   const handleTouchStart = (task: Task, e: React.TouchEvent) => {
       if (editingTaskId) return;
       
+      // If we touch another task, close the currently open one
+      if (openSwipeTaskId && openSwipeTaskId !== task.id) {
+          setOpenSwipeTaskId(null);
+      }
+
       const touch = e.touches[0];
       touchStart.current = { x: touch.clientX, y: touch.clientY };
       setSwipingTaskId(task.id);
-      setSwipeOffset(0);
+      
+      // If this task is already open, start offset at -60 (so we can drag it back closed)
+      const initialOffset = openSwipeTaskId === task.id ? -60 : 0;
+      setSwipeOffset(initialOffset);
 
-      // Start Long Press Timer
-      handlePressEnd(); // Clear existing
-      longPressTimer.current = window.setTimeout(() => {
-          setTaskToDelete(task);
-          if (navigator.vibrate) navigator.vibrate(50);
-      }, 500);
+      // Start Long Press Timer (only if not already open)
+      handlePressEnd(); 
+      if (!openSwipeTaskId) {
+        longPressTimer.current = window.setTimeout(() => {
+            setTaskToDelete(task);
+            if (navigator.vibrate) navigator.vibrate(50);
+        }, 500);
+      }
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
@@ -136,12 +151,14 @@ export const TodoList: React.FC<TodoListProps> = ({ tasks, setTasks, selectedDat
       if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) {
           if (e.cancelable) e.preventDefault(); // Stop scrolling
 
-          // Allow LEFT swipe (negative deltaX) to show right-side button
-          if (deltaX < 0) {
-              setSwipeOffset(Math.max(deltaX, -80)); // Limit to -80px left
-          } else {
-              setSwipeOffset(0);
-          }
+          // Calculate new offset based on initial state
+          const startOffset = openSwipeTaskId === swipingTaskId ? -60 : 0;
+          let newOffset = startOffset + deltaX;
+
+          // Limit the swipe range (can't go right of 0, can't go left of -100)
+          newOffset = Math.min(0, Math.max(newOffset, -100));
+          
+          setSwipeOffset(newOffset);
       }
   };
 
@@ -149,21 +166,29 @@ export const TodoList: React.FC<TodoListProps> = ({ tasks, setTasks, selectedDat
       handlePressEnd(); // Clear long press
 
       if (swipingTaskId) {
-          // Threshold to trigger delete (e.g. pulled -50px left)
-          if (swipeOffset < -50) {
-             const task = tasks.find(t => t.id === swipingTaskId);
-             if (task) setTaskToDelete(task);
+          // Logic: If dragged far enough left (< -50), keep it open.
+          // If dragged back right (> -30), close it.
+          const threshold = -50;
+          
+          if (swipeOffset < threshold) {
+              setOpenSwipeTaskId(swipingTaskId);
+              setSwipeOffset(-60); // Snap to open position
+          } else {
+              setOpenSwipeTaskId(null);
+              setSwipeOffset(0); // Snap to closed
           }
-          // Reset swipe
-          setSwipeOffset(0);
+          
           setSwipingTaskId(null);
       }
       touchStart.current = null;
   };
 
-  // Mouse handlers for desktop long press (no swipe)
   const handleMouseDown = (task: Task, e: React.MouseEvent) => {
       if (editingTaskId || e.button !== 0) return;
+      if (openSwipeTaskId) {
+        setOpenSwipeTaskId(null); // Click anywhere to close
+        return;
+      }
       handlePressEnd();
       longPressTimer.current = window.setTimeout(() => {
           setTaskToDelete(task);
@@ -189,6 +214,11 @@ export const TodoList: React.FC<TodoListProps> = ({ tasks, setTasks, selectedDat
       }
   };
 
+  const handleDeleteClick = (task: Task, e: React.MouseEvent) => {
+      e.stopPropagation();
+      setTaskToDelete(task);
+  };
+
   const cancelDeleteTask = () => setTaskToDelete(null);
 
   const visibleTasks = tasks.filter(task => {
@@ -208,7 +238,6 @@ export const TodoList: React.FC<TodoListProps> = ({ tasks, setTasks, selectedDat
   const sortedTasks = [...visibleTasks].sort((a, b) => (a.completed === b.completed) ? b.createdAt - a.createdAt : a.completed ? 1 : -1);
   const getTagById = (id: string) => tags.find(t => t.id === id);
 
-  // Helper to sanitize text for display
   const getSanitizedTaskText = (text: string) => {
       if (text.startsWith('<') || text.includes('xml') || text.length > 50) {
           return text.length > 20 ? text.slice(0, 20) + '...' : '选中任务';
@@ -250,80 +279,94 @@ export const TodoList: React.FC<TodoListProps> = ({ tasks, setTasks, selectedDat
             <p className="font-bold text-text-muted text-sm">今天还没有任务哦 ~</p>
           </div>
         ) : (
-          sortedTasks.map(task => (
-            <div key={task.id} className="relative select-none group">
-              
-              {/* Background Layer (Right-side Delete Button) */}
-              <div className="absolute right-4 top-0 bottom-0 w-16 flex items-center justify-end z-0">
-                  <div className="w-12 h-12 bg-rose-500 rounded-2xl flex items-center justify-center shadow-inner shadow-black/10">
-                      <Trash2 className="w-5 h-5 text-white" />
-                  </div>
-              </div>
+          sortedTasks.map(task => {
+            // Determine current translateX
+            let translateX = 0;
+            if (swipingTaskId === task.id) {
+                translateX = swipeOffset;
+            } else if (openSwipeTaskId === task.id) {
+                translateX = -60; // Fixed open position
+            }
 
-              {/* Foreground Layer (Task Card) */}
-              <div 
-                onMouseDown={(e) => handleMouseDown(task, e)}
-                onTouchStart={(e) => handleTouchStart(task, e)}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={handleTouchEnd}
-                onMouseUp={handlePressEnd}
-                onMouseLeave={handlePressEnd}
-                onDoubleClick={() => startEditing(task)}
-                onContextMenu={handleContextMenu}
-                style={{ 
-                    transform: `translateX(${task.id === swipingTaskId ? swipeOffset : 0}px)`,
-                    transition: task.id === swipingTaskId && swipeOffset !== 0 ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)'
-                }}
-                className={`relative z-10 flex items-start gap-3 p-4 rounded-2xl border w-full cursor-pointer touch-pan-y transition-all duration-200 ${
-                  task.completed 
-                    ? 'bg-gray-50 border-gray-100' // Opaque background for completed
-                    : 'bg-surface border-border shadow-sm'
-                }`}
-              >
-                <button onClick={(e) => { e.stopPropagation(); toggleTask(task.id); }} className="mt-0.5 transition-all duration-300 transform shrink-0">
-                  {task.completed ? (
-                      <div className="w-6 h-6 bg-task-blue rounded-full flex items-center justify-center shadow-md shadow-task-blue/30 animate-pop">
-                          <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />
-                      </div>
-                  ) : (
-                      <div className="w-6 h-6 rounded-full border-2 border-border hover:border-task-blue transition-colors bg-white" />
-                  )}
-                </button>
-                <div className="flex-1 min-w-0 pt-0.5">
-                   {editingTaskId === task.id ? (
-                     <textarea
-                        ref={editInputRef}
-                        value={editText}
-                        onChange={(e) => setEditText(e.target.value)}
-                        onBlur={confirmEdit}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            confirmEdit();
-                          }
-                          if (e.key === 'Escape') cancelEdit();
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                        className="w-full font-semibold leading-tight bg-gray-50/50 border-none outline-none p-2 -m-2 rounded-lg resize-none focus:ring-2 focus:ring-task-blue/50 focus:bg-white transition-all"
-                        rows={1}
-                     />
-                   ) : (
-                     <span className={`font-semibold transition-all break-words leading-tight block ${
-                         task.completed 
-                            ? 'text-gray-300 line-through decoration-task-blue/40 decoration-2' 
-                            : 'text-text-main'
-                         }`}>
-                        {task.text}
-                     </span>
-                   )}
-                   <div className="flex flex-wrap items-center gap-2 mt-2">
-                      {task.reminderTime && <span className="text-[11px] font-bold flex items-center gap-1.5 px-2 py-0.5 rounded bg-gray-100 text-text-muted"><Clock className="w-3 h-3" strokeWidth={2.5} />{new Date(task.reminderTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>}
-                      {task.tags.map(tagId => { const t = getTagById(tagId); return t ? <span key={t.id} className={`text-[11px] font-extrabold px-2 py-0.5 rounded-full ${t.color}`}>{t.name}</span> : null; })}
-                   </div>
+            return (
+              <div key={task.id} className="relative select-none group">
+                
+                {/* Background Layer (Right-side Delete Button) */}
+                {/* z-0 so it's behind. Pointer events enabled so we can click it when revealed. */}
+                <div className="absolute right-0 top-0 bottom-0 w-[60px] flex items-center justify-center z-0">
+                    <button 
+                        onClick={(e) => handleDeleteClick(task, e)}
+                        className="w-[50px] h-[50px] bg-rose-500 rounded-2xl flex items-center justify-center shadow-inner shadow-black/10 active:scale-90 transition-transform"
+                    >
+                        <Trash2 className="w-5 h-5 text-white" />
+                    </button>
+                </div>
+
+                {/* Foreground Layer (Task Card) */}
+                <div 
+                  onMouseDown={(e) => handleMouseDown(task, e)}
+                  onTouchStart={(e) => handleTouchStart(task, e)}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={handleTouchEnd}
+                  onMouseUp={handlePressEnd}
+                  onMouseLeave={handlePressEnd}
+                  onDoubleClick={() => startEditing(task)}
+                  onContextMenu={handleContextMenu}
+                  style={{ 
+                      transform: `translateX(${translateX}px)`,
+                      transition: swipingTaskId === task.id ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)'
+                  }}
+                  className={`relative z-10 flex items-start gap-3 p-4 rounded-2xl border w-full cursor-pointer touch-pan-y ${
+                    task.completed 
+                      ? 'bg-gray-50 border-gray-100' 
+                      : 'bg-surface border-border shadow-sm'
+                  }`}
+                >
+                  <button onClick={(e) => { e.stopPropagation(); toggleTask(task.id); }} className="mt-0.5 transition-all duration-300 transform shrink-0">
+                    {task.completed ? (
+                        <div className="w-6 h-6 bg-task-blue rounded-full flex items-center justify-center shadow-md shadow-task-blue/30 animate-pop">
+                            <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />
+                        </div>
+                    ) : (
+                        <div className="w-6 h-6 rounded-full border-2 border-border hover:border-task-blue transition-colors bg-white" />
+                    )}
+                  </button>
+                  <div className="flex-1 min-w-0 pt-0.5">
+                     {editingTaskId === task.id ? (
+                       <textarea
+                          ref={editInputRef}
+                          value={editText}
+                          onChange={(e) => setEditText(e.target.value)}
+                          onBlur={confirmEdit}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault();
+                              confirmEdit();
+                            }
+                            if (e.key === 'Escape') cancelEdit();
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-full font-semibold leading-tight bg-gray-50/50 border-none outline-none p-2 -m-2 rounded-lg resize-none focus:ring-2 focus:ring-task-blue/50 focus:bg-white transition-all"
+                          rows={1}
+                       />
+                     ) : (
+                       <span className={`font-semibold transition-all break-words leading-tight block ${
+                           task.completed 
+                              ? 'text-gray-300 line-through decoration-task-blue/40 decoration-2' 
+                              : 'text-text-main'
+                           }`}>
+                          {task.text}
+                       </span>
+                     )}
+                     <div className="flex flex-wrap items-center gap-2 mt-2">
+                        {task.reminderTime && <span className="text-[11px] font-bold flex items-center gap-1.5 px-2 py-0.5 rounded bg-gray-100 text-text-muted"><Clock className="w-3 h-3" strokeWidth={2.5} />{new Date(task.reminderTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>}
+                        {task.tags.map(tagId => { const t = getTagById(tagId); return t ? <span key={t.id} className={`text-[11px] font-extrabold px-2 py-0.5 rounded-full ${t.color}`}>{t.name}</span> : null; })}
+                     </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 
