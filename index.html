@@ -62,12 +62,20 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     
     <style>
+      html {
+        height: 100%;
+        background-color: #F9FAFB; /* Ensure html tag has the background color */
+        overscroll-behavior-y: none; /* Disable vertical rubber-banding */
+      }
       body {
+        height: 100%;
         background-color: #F9FAFB;
         color: #1F2937;
         -webkit-tap-highlight-color: transparent;
         padding-top: env(safe-area-inset-top);
         padding-bottom: env(safe-area-inset-bottom);
+        overscroll-behavior-y: none; /* Disable vertical rubber-banding */
+        overflow: hidden; /* Prevent body scrolling entirely, handled by App container */
       }
       .no-scrollbar::-webkit-scrollbar { display: none; }
       .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -88,13 +96,13 @@
 <script type="importmap">
 {
   "imports": {
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
     "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
     "vite": "https://aistudiocdn.com/vite@^7.2.6",
-    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1"
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/"
   }
 }
 </script>
