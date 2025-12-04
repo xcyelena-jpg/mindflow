@@ -28,6 +28,9 @@ const App: React.FC = () => {
   const isProgrammaticScroll = useRef(false);
   const scrollTimeoutRef = useRef<number | null>(null);
   
+  // Track the last known "today" string to detect day changes
+  const lastKnownToday = useRef(formatDateToKey(new Date()));
+
   const [tasks, setTasks] = useState<Task[]>(() => {
     const saved = localStorage.getItem('mindflow_tasks');
     if (!saved) return [];
@@ -72,6 +75,38 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('mindflow_tasks', JSON.stringify(tasks)); }, [tasks]);
   useEffect(() => { localStorage.setItem('mindflow_entries', JSON.stringify(entries)); }, [entries]);
   useEffect(() => { localStorage.setItem('mindflow_tags', JSON.stringify(tags)); }, [tags]);
+
+  // --- Auto-Date Sync Logic ---
+  useEffect(() => {
+    const checkDayChange = () => {
+      const now = new Date();
+      const currentTodayKey = formatDateToKey(now);
+      
+      // If the physical day has changed since we last checked (or since app load)
+      if (currentTodayKey !== lastKnownToday.current) {
+        lastKnownToday.current = currentTodayKey;
+        // Automatically jump to the new today
+        setSelectedDate(now);
+      }
+    };
+
+    // Check when app comes to foreground (user unlocks phone/switches tabs)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkDayChange();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    // Also check every minute (for midnight crossover while using app)
+    const interval = setInterval(checkDayChange, 60000);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(interval);
+    };
+  }, []);
 
   // --- Navigation Logic ---
 
